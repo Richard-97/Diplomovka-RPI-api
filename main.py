@@ -5,7 +5,7 @@ import requests, time
 from flask_cors import CORS
 import json, time, random, hashlib, atexit, os
 from google.cloud import texttospeech
-from camera import VideoCamera
+# from camera import VideoCamera
 import json
 import base64
 import threading
@@ -106,15 +106,15 @@ def test():
     cursor.execute(query)
     db_connection.commit()
     return jsonify({"response": "connected"})
-@app.route('/video_feed', methods=['POST'])
-def video_feed():
-    global GLOBAL_CAMERA
-    GLOBAL_CAMERA = request.get_json()['play']
-    if GLOBAL_CAMERA:
-        for video_frame in gen(VideoCamera()):  
-            socketio.emit('video_flask',{'data':  video_frame} )
-    return Response(gen(VideoCamera()),
-                      mimetype='multipart/x-mixed-replace; boundary=frame')
+# @app.route('/video_feed', methods=['POST'])
+# def video_feed():
+#     global GLOBAL_CAMERA
+#     GLOBAL_CAMERA = request.get_json()['play']
+#     if GLOBAL_CAMERA:
+#         for video_frame in gen(VideoCamera()):  
+#             socketio.emit('video_flask',{'data':  video_frame} )
+#     return Response(gen(VideoCamera()),
+#                       mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/text_to_speech', methods=['POST'])
 def textToSpeech():
