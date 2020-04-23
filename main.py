@@ -61,15 +61,17 @@ def all_sensor_data():
 def logIn():
     if(request.method == 'POST'):
         email = request.get_json()['email']
-        password = request.get_json()['password']
-        query = """SELECT * FROM public.users WHERE email='%s' AND password='%s'""" %email, password
+        password = hashlib.md5(request.get_json()['password'].encode()).hexdigest()
+        query = """SELECT password FROM public.users WHERE email='{0}'""".format(email)
         cursor = db_connection.cursor()
         cursor.execute(query)
         data = cursor.fetchone()
+        
         if data == None:
             return jsonify({"response": "error"})
-        else:
+        elif data[0].strip() == password: 
             return jsonify({"response": "success"})
+        else: return jsonify({"response": "bad password"})
         
 @app.route('/registration', methods=['POST'])
 def registration():
@@ -78,8 +80,18 @@ def registration():
             firstName = request.get_json()['firstName']
             lastName = request.get_json()['lastName']
             email = request.get_json()['email']
-            password = request.get_json()['password']
-            query = """INSERT INTO users (first_name, last_name, email, password) VALUES ()""" % firstName, lastName, email, password
+            password = hashlib.md5(request.get_json()['password'].encode()).hexdigest()
+
+            query = 'SELECT id, email FROM users'
+            cursor = db_connection.cursor()
+            cursor.execute(query)
+            data = cursor.fetchall()
+            for i in data:
+                if(email == i[1].strip()):
+                    return jsonify({'response': 'user exists'})
+            
+            newID  = data.pop()[0] + 1            
+            query = "INSERT INTO users (id, first_name, last_name, email, password) VALUES ('{0}', '{1}', '{2}', '{3}', '{4}') ".format(newID, firstName, lastName, email, password)
             cursor = db_connection.cursor()
             cursor.execute(query)
             db_connection.commit()
@@ -102,13 +114,7 @@ def gen(camera):
 def test4545():
     return jsonify({"response": "kokot"})
 
-@app.route('/test', methods=['GET'])
-def test():
-    query = "INSERT INTO users(id, first_name, last_name, email, password) VALUES (2, 'Martin', 'Tovarnak', 'martin.tovarnak@student.tuke.sk', 'test')"
-    cursor = db_connection.cursor()
-    cursor.execute(query)
-    db_connection.commit()
-    return jsonify({"response": "connected"})
+
 # @app.route('/video_feed', methods=['POST'])
 # def video_feed():
 #     global GLOBAL_CAMERA
