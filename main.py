@@ -99,6 +99,9 @@ def gen(camera):
             break
         frame = camera.get_frame()
         yield frame
+@app.route('/', methods=['GET'])
+def test():
+    return jsonify({"response": "kokot"})
 @app.route('/test', methods=['GET'])
 def test():
     query = "INSERT INTO users(id, first_name, last_name, email, password) VALUES (2, 'Martin', 'Tovarnak', 'martin.tovarnak@student.tuke.sk', 'test')"
