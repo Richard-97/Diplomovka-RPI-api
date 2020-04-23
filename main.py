@@ -62,7 +62,7 @@ def logIn():
     if(request.method == 'POST'):
         email = request.get_json()['email']
         password = request.get_json()['password']
-        query = "SELECT * FROM public.users WHERE email='"+email+"' AND password='"+password+"'"
+        query = """SELECT * FROM public.users WHERE email='%s' AND password='%s'""" %email, password
         cursor = db_connection.cursor()
         cursor.execute(query)
         data = cursor.fetchone()
