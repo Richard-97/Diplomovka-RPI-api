@@ -6,6 +6,9 @@ app = Flask(__name__)
 def all_sensor_data():
     return jsonify({'resp': 'okik'})
 
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
 # from flask_socketio import SocketIO, send, emit
 # import requests, time
 # from flask_cors import CORS
