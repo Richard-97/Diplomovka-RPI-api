@@ -79,8 +79,7 @@ def registration():
             lastName = request.get_json()['lastName']
             email = request.get_json()['email']
             password = request.get_json()['password']
-            admin = request.get_json()['admin']
-            query = "INSERT INTO public.users (first_name, last_name, email, password, admin) VALUES ('"+firstName+"','"+lastName+"','"+email+"','"+password+"','"+str(admin).lower()+"')"
+            query = """INSERT INTO users (first_name, last_name, email, password) VALUES ()""" % firstName, lastName, email, password
             cursor = db_connection.cursor()
             cursor.execute(query)
             db_connection.commit()
