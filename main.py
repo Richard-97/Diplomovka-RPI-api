@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, request, Response
 
+app = Flask(__name__)
+
 @app.route('/test', methods=['GET'])
 def all_sensor_data():
     return jsonify({'resp': 'okik'})
