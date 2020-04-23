@@ -86,11 +86,14 @@ def registration():
             cursor = db_connection.cursor()
             cursor.execute(query)
             data = cursor.fetchall()
-            for i in data:
-                if(email == i[1].strip()):
-                    return jsonify({'response': 'user exists'})
-            
-            newID  = data.pop()[0] + 1            
+            newID = 1
+            if data != None:
+                for i in data:
+                    if(email == i[1].strip()):
+                        return jsonify({'response': 'user exists'})
+            else: 
+                newID = data.pop()[0] + 1  
+         
             query = "INSERT INTO users (id, first_name, last_name, email, password) VALUES ('{0}', '{1}', '{2}', '{3}', '{4}') ".format(newID, firstName, lastName, email, password)
             cursor = db_connection.cursor()
             cursor.execute(query)
@@ -112,7 +115,7 @@ def gen(camera):
         yield frame
 @app.route('/', methods=['GET'])
 def test4545():
-    return jsonify({"response": "kokot"})
+    return jsonify({"response": "ok"})
 
 
 # @app.route('/video_feed', methods=['POST'])
