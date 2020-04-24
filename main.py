@@ -36,7 +36,7 @@ psql_database = 'DBNAME'
 
 app = Flask(__name__)
 #app.config['SECRET_KEY'] = 'secret'
-socketio = SocketIO(app, cors_allowed_origins="https://diplomovka-fe.herokuapp.com/")
+socketio = SocketIO(app)
 CORS(app)
 
 
@@ -60,18 +60,22 @@ def all_sensor_data():
 @app.route('/logIn', methods=['POST'])
 def logIn():
     if(request.method == 'POST'):
-        email = request.get_json()['email']
-        password = hashlib.md5(request.get_json()['password'].encode()).hexdigest()
-        query = """SELECT password FROM public.users WHERE email='{0}'""".format(email)
-        cursor = db_connection.cursor()
-        cursor.execute(query)
-        data = cursor.fetchone()
+        try:
+            email = request.get_json()['email']
+            password = hashlib.md5(request.get_json()['password'].encode()).hexdigest()
+            query = """SELECT password FROM public.users WHERE email='{0}'""".format(email)
+            cursor = db_connection.cursor()
+            cursor.execute(query)
+            data = cursor.fetchone()
         
-        if data == None:
+            if data == None:
+                return jsonify({"response": "user doesnt exist"})
+            elif data[0].strip() == password: 
+                return jsonify({"response": "success"})
+            else: return jsonify({"response": "bad password"})
+            
+        except Exception as err:
             return jsonify({"response": "error"})
-        elif data[0].strip() == password: 
-            return jsonify({"response": "success"})
-        else: return jsonify({"response": "bad password"})
         
 @app.route('/registration', methods=['POST'])
 def registration():
