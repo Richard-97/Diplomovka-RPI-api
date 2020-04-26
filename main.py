@@ -1,9 +1,8 @@
-from flask import Flask, jsonify, request, Response
-import os
+from flask import Flask, jsonify, request, Response, abort, make_response
 from flask_socketio import SocketIO, send, emit
 import requests, time
-from flask_cors import CORS
-import json, time, random, hashlib, atexit, os
+from flask_cors import CORS, cross_origin
+import json, time, random, hashlib, atexit, os, jwt, datetime
 from google.cloud import texttospeech
 # from camera import VideoCamera
 import json
@@ -13,6 +12,8 @@ import psycopg2
 import speech_recognition as sr
 from google.cloud import speech
 from google.cloud.speech_v1p1beta1 import enums
+from functools import wraps
+
 
 #from rule_base_system import StartSystem
 
@@ -29,18 +30,11 @@ streaming_config = speech.types.StreamingRecognitionConfig(
         config=config,
         interim_results=True)
 
-psql_hostname = 'localhost'
-psql_username = 'USERNAME'
-psql_password = 'PASSWORD'
-psql_database = 'DBNAME'
-
 app = Flask(__name__)
-#app.config['SECRET_KEY'] = 'secret'
+app.config['SECRET_KEY'] = 'diploma-seceret'
 socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-
-#db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "postgres://oguyvjhp:PtvRuN...@kandula.db.elephantsql.com:5432/oguyvjhp ",  port = "5432", database = "postgres")
 db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "kandula.db.elephantsql.com",  port = "5432", database = "oguyvjhp")
 PI3_URL_grovepi = 'http://192.168.10.102:5001/rasberry_pi_sensors_grovepi'
 PI3_URL_LIGHTS = 'http://192.168.10.102:5001/rasberry_pi_light_sensor' 
@@ -53,28 +47,83 @@ def tuple_to_dict(tup, di):
     di = dict(tup) 
     return di 
 
+# def tokenRequired(f):
+#     @wrap(f)
+#     def decorated(*args, **kwargs):
+#         token = request.args.get('token')
+#         if not token:
+#             return jsonify({'res': 'Token is missing'})
+#         try:
+#             data = jwt.decode(token, app.config['SECRET_KEY'])
+#         except:
+#             return jsonify({'res': 'token is invalid'})
+#         return f(*args, **kwargs)
+#     return decorated
+ 
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+        if not token:
+            return jsonify({'res': 'Token is missing'}), 401
+        
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'])
+            query = """SELECT email FROM public.users WHERE email='{0}'""".format(data['user'])
+            cursor = db_connection.cursor()
+            cursor.execute(query)
+            user = cursor.fetchone()
+            db_connection.commit()
+        except:
+            return jsonify({'res': 'Token is invalid'})
+
+        return f(user, *args, **kwargs)
+    return decorated
+        
+    
+@app.route('/user/auth')
+@token_required
+def auth(user):
+    query = """SELECT * FROM public.users WHERE email='{0}'""".format(user[0])
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    data = cursor.fetchone()
+    db_connection.commit()
+
+    return jsonify({'res': 'user verified', 'user': {'id': data[0], 'surname': data[1].strip(), 'lastname': data[2].strip(), 'email': data[3].strip() } })
+
 @app.route('/all_sensor_data', methods=['GET'])
 def all_sensor_data():
     data = list(mongo.db.sensors.find({}, {'_id': False}))
     return jsonify({'sensors': data})
-@app.route('/logIn', methods=['POST'])
+
+@app.route('/logIn')
+#@cross_origin()
 def logIn():
-    if(request.method == 'POST'):
-        try:
-            email = request.get_json()['email']
-            password = hashlib.md5(request.get_json()['password'].encode()).hexdigest()
+    if(request.method == 'GET'):
+        auth = request.authorization
+        if not auth or not auth.username or not auth.password:
+            return make_response('Not verified', 401, {'WWW.Authenticate': 'Basic realm="Login required."'})
+        try:   
+            email = auth.username
+            password = hashlib.md5(auth.password.encode()).hexdigest()
             query = """SELECT password FROM public.users WHERE email='{0}'""".format(email)
             cursor = db_connection.cursor()
             cursor.execute(query)
             data = cursor.fetchone()
+            db_connection.commit()
         
             if data == None:
                 return jsonify({"response": "user doesnt exist"})
             elif data[0].strip() == password: 
-                return jsonify({"response": "success"})
+                token = jwt.encode({'user': email, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60)}, app.config['SECRET_KEY'])
+                return jsonify({'token': token.decode('UTF-8')})
             else: return jsonify({"response": "bad password"})
             
         except Exception as err:
+            print(err)
             return jsonify({"response": "error"})
         
 @app.route('/registration', methods=['POST'])
@@ -90,6 +139,7 @@ def registration():
             cursor = db_connection.cursor()
             cursor.execute(query)
             data = cursor.fetchall()
+            db_connection.commit()
             newID = 1
             if data != None:
                 for i in data:
@@ -106,6 +156,21 @@ def registration():
         except Exception as err:
             print(err)
             return jsonify({'response': 'error'})
+
+@app.route('/updateLastActionTable', methods=['POST'])
+def updateLastActionTable():
+    try:
+        userID = request.get_json()['userID']
+        action = request.get_json()['action']
+        time = request.get_json()['time']
+        query = """INSERT INTO "tableActions" ("userID", action, time) VALUES ('{0}', '{1}', '{2}');""".format(userID, action, time)
+        cursor = db_connection.cursor()
+        cursor.execute(query)
+        db_connection.commit()
+        return jsonify({"response": "success"})
+    except Exception as err:
+        print(err)
+        return jsonify({"response": "error"})
 
 
 GLOBAL_CAMERA = False
@@ -134,7 +199,6 @@ def test4545():
 
 @app.route('/text_to_speech', methods=['POST'])
 def textToSpeech():
-    print('TEXTTOSPEECH')
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="textToSpeechCredentials.json"
     client = texttospeech.TextToSpeechClient()
     text = request.get_json()['text']
@@ -151,8 +215,8 @@ def textToSpeech():
     # Perform the text-to-speech request on the text input with the selected
     # voice parameters and audio file type
     response = client.synthesize_speech(synthesis_input, voice, audio_config)
-    with open('output.mp3', 'wb') as out:
-        out.write(response.audio_content)
+    #with open('output.mp3', 'wb') as out:
+        # out.write(response.audio_content)
     return Response(response.audio_content, mimetype="audio/mp3")
     
 
@@ -162,11 +226,11 @@ def connectHandler():
 
 @socketio.on('join')
 def connectHandler2(data):
-    print('JOIN')
     query = 'SELECT title, power FROM public.sensors'
     cursor = db_connection.cursor()
     cursor.execute(query)
     data = cursor.fetchall()
+    db_connection.commit()
     dictionary = {}
     data = tuple_to_dict(data, dictionary)
     rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
@@ -180,6 +244,7 @@ def update_sensors_start():
     cursor = db_connection.cursor()
     cursor.execute(query)
     data = cursor.fetchall()
+    db_connection.commit()
     dictionary = {}
     data = tuple_to_dict(data, dictionary)
     emit('update_actions', data, broadcast=True)
@@ -190,30 +255,49 @@ def test5(data):
     query = 'UPDATE sensors SET power =' + str(data["bool"]).lower() +" WHERE id = " + str(data["id"])
     cursor = db_connection.cursor()
     cursor.execute(query)
-    db_connection.commit()
 
+    query = 'SELECT tb.action, tb.time, u.email from "tableActions" tb LEFT JOIN "users" u ON u.id=tb."userID"'
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    tableData = cursor.fetchall()
+    db_connection.commit()
+    retTable = []
+    for i in tableData:
+        retTable.append({
+            'action':i[0],
+            'id': i[2].strip(),
+            'time': """{0}.{1}.{2} {3}:{4}""".format(i[1].day, i[1].month, i[1].year, i[1].hour, i[1].minute)
+            })
+    print(retTable)
     query = 'SELECT title, power FROM public.sensors'
     cursor.execute(query)
     data = cursor.fetchall()
+    db_connection.commit()
     dictionary = {}
     data = tuple_to_dict(data, dictionary)
 
+
     emit('update_actions', data, broadcast=True)
+    emit('update_table_data', retTable, broadcast=True)
 
 @socketio.on('update_sensor_lights')
 def update_sensor_lights(data):
-    print('update_sensor_lights', data['bool'])
+    query = 'UPDATE sensors SET power =' + str(data["bool"]).lower() +" WHERE id = 10"
+    cursor = db_connection.cursor()
+    cursor.execute(query)   
+    db_connection.commit()
 
     headers = {'content-type': 'application/json'}
     req = requests.post(url=PI3_LIGHT_SENSORS, data=json.dumps({'lights': data['bool']}), headers=headers)
-    print('reeeeq', req.json())
 
 @socketio.on('update_sensors_grovepi_interval')
 def update_sensors_interval():
-    print('update_sensors_grovepi_interval')
-    rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
-
-    emit('update_sensors', rpi_sensors_grovepi, broadcast=True)
+    try:
+        rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
+        print(rpi_sensors_grovepi)
+        emit('update_sensors', rpi_sensors_grovepi, broadcast=True)
+    except Exception as err:
+        emit('error', )
 
 @socketio.on('expertal_system')
 def expertalSystem():
@@ -238,10 +322,11 @@ def startGoogleCloudStream(data):
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    from gevent import pywsgi
-    from geventwebsocket.handler import WebSocketHandler
-    server = pywsgi.WSGIServer(('', port), app, handler_class=WebSocketHandler)
-    server.serve_forever()
+    #port = int(os.environ.get("PORT", 5000))
+    # from gevent import pywsgi
+    # from geventwebsocket.handler import WebSocketHandler
+    # server = pywsgi.WSGIServer(('', port), app, handler_class=WebSocketHandler)
+    # server.serve_forever()
 
     #app.run(host='0.0.0.0', port=port)
+    socketio.run(app, port=port)
