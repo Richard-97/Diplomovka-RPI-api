@@ -100,7 +100,7 @@ def all_sensor_data():
     return jsonify({'sensors': data})
 
 @app.route('/logIn')
-@cross_origin()
+#@cross_origin()
 def logIn():
     if(request.method == 'GET'):
         auth = request.authorization
