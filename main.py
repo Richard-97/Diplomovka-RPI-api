@@ -33,7 +33,7 @@ streaming_config = speech.types.StreamingRecognitionConfig(
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'diploma-seceret'
 app.config['CORS_HEADERS'] = 'Content-Type'
-CORS(app)
+CORS(app, cors_allowed_origins="https://diplomovka-fe.herokuapp.com")
 socketio = SocketIO(app, cors_allowed_origins="https://diplomovka-fe.herokuapp.com")
 
 
@@ -181,6 +181,7 @@ def test4545():
 #                       mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/text_to_speech', methods=['POST'])
+@cross_origin(origin='https://diplomovka-fe.herokuapp.com',headers=['Content- Type'])
 def textToSpeech():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
     client = texttospeech.TextToSpeechClient()
