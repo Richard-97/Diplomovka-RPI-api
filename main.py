@@ -181,28 +181,28 @@ def test4545():
 #                       mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/text_to_speech', methods=['POST'])
-@cross_origin(origin='https://diplomovka-fe.herokuapp.com',headers=['Content- Type'])
 def textToSpeech():
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
-    print('GOOGLE', os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
-    client = texttospeech.TextToSpeechClient()
-    text = request.get_json()['text']
-    synthesis_input = texttospeech.types.SynthesisInput(text=text)
-    voice = texttospeech.types.VoiceSelectionParams(
-    language_code='sk-SK',
-    name='sk-SK-Wavenet-A',
-    ssml_gender=texttospeech.enums.SsmlVoiceGender.FEMALE)
+    # os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
+    # print('GOOGLE', os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+    # client = texttospeech.TextToSpeechClient()
+    # text = request.get_json()['text']
+    # synthesis_input = texttospeech.types.SynthesisInput(text=text)
+    # voice = texttospeech.types.VoiceSelectionParams(
+    # language_code='sk-SK',
+    # name='sk-SK-Wavenet-A',
+    # ssml_gender=texttospeech.enums.SsmlVoiceGender.FEMALE)
 
-    # Select the type of audio file you want returned
-    audio_config = texttospeech.types.AudioConfig(
-        audio_encoding=texttospeech.enums.AudioEncoding.MP3)
+    # # Select the type of audio file you want returned
+    # audio_config = texttospeech.types.AudioConfig(
+    #     audio_encoding=texttospeech.enums.AudioEncoding.MP3)
 
-    # Perform the text-to-speech request on the text input with the selected
-    # voice parameters and audio file type
-    response = client.synthesize_speech(synthesis_input, voice, audio_config)
-    # with open('output.mp3', 'wb') as out:
-    #     out.write(response.audio_content)
-    return Response(response.audio_content, mimetype="audio/mp3")
+    # # Perform the text-to-speech request on the text input with the selected
+    # # voice parameters and audio file type
+    # response = client.synthesize_speech(synthesis_input, voice, audio_config)
+    # # with open('output.mp3', 'wb') as out:
+    # #     out.write(response.audio_content)
+    # return Response(response.audio_content, mimetype="audio/mp3")
+    return jsonify({"text to speech": "ok"})
     
 
 @socketio.on('connect')
