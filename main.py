@@ -32,9 +32,9 @@ streaming_config = speech.types.StreamingRecognitionConfig(
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'diploma-seceret'
-app.config['CORS_HEADERS'] = 'Content-Type'
-CORS(app, cors_allowed_origins="https://diplomovka-fe.herokuapp.com")
-socketio = SocketIO(app, cors_allowed_origins="https://diplomovka-fe.herokuapp.com")
+
+CORS(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "kandula.db.elephantsql.com",  port = "5432", database = "oguyvjhp")
@@ -182,28 +182,25 @@ def test4545():
 
 @app.route('/text_to_speech', methods=['POST'])
 def textToSpeech():
-    # os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
-    # print('GOOGLE', os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
-    # client = texttospeech.TextToSpeechClient()
-    # text = request.get_json()['text']
-    # synthesis_input = texttospeech.types.SynthesisInput(text=text)
-    # voice = texttospeech.types.VoiceSelectionParams(
-    # language_code='sk-SK',
-    # name='sk-SK-Wavenet-A',
-    # ssml_gender=texttospeech.enums.SsmlVoiceGender.FEMALE)
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
+    client = texttospeech.TextToSpeechClient()
+    text = request.get_json()['text']
+    synthesis_input = texttospeech.types.SynthesisInput(text=text)
+    voice = texttospeech.types.VoiceSelectionParams(
+    language_code='sk-SK',
+    name='sk-SK-Wavenet-A',
+    ssml_gender=texttospeech.enums.SsmlVoiceGender.FEMALE)
 
-    # # Select the type of audio file you want returned
-    # audio_config = texttospeech.types.AudioConfig(
-    #     audio_encoding=texttospeech.enums.AudioEncoding.MP3)
+    # Select the type of audio file you want returned
+    audio_config = texttospeech.types.AudioConfig(
+        audio_encoding=texttospeech.enums.AudioEncoding.MP3)
 
-    # # Perform the text-to-speech request on the text input with the selected
-    # # voice parameters and audio file type
-    # response = client.synthesize_speech(synthesis_input, voice, audio_config)
-    # # with open('output.mp3', 'wb') as out:
-    # #     out.write(response.audio_content)
-    # return Response(response.audio_content, mimetype="audio/mp3")
-    rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
-    return jsonify({"text to speech": rpi_sensors_grovepi})
+    # Perform the text-to-speech request on the text input with the selected
+    # voice parameters and audio file type
+    response = client.synthesize_speech(synthesis_input, voice, audio_config)
+    #with open('output.mp3', 'wb') as out:
+        # out.write(response.audio_content)
+    return Response(response.audio_content, mimetype="audio/mp3")
     
 
 @socketio.on('connect')
