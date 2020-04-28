@@ -36,10 +36,10 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "kandula.db.elephantsql.com",  port = "5432", database = "oguyvjhp")
-PI3_URL_grovepi = 'http://192.168.10.102:5001/rasberry_pi_sensors_grovepi'
-PI3_URL_LIGHTS = 'http://192.168.10.102:5001/rasberry_pi_light_sensor' 
-PI3_URL = 'http://192.168.10.102:5001/rasberry_pi_sensors'
-PI3_LIGHT_SENSORS = 'http://192.168.10.102:5001/rasberry_pi_light_sensor'
+PI3_URL_grovepi = 'http://88.212.50.96:8080/rasberry_pi_sensors_grovepi'
+PI3_URL_LIGHTS = 'http://88.212.50.96:8080/rasberry_pi_light_sensor' 
+PI3_URL = 'http://88.212.50.96:8080/rasberry_pi_sensors'
+PI3_LIGHT_SENSORS = 'http://88.212.50.96:8080/rasberry_pi_light_sensor'
 
 def print_date_time():
     print(time.strftime("%A, %d. %B %Y %I:%M:%S %p"))
@@ -47,19 +47,6 @@ def tuple_to_dict(tup, di):
     di = dict(tup) 
     return di 
 
-# def tokenRequired(f):
-#     @wrap(f)
-#     def decorated(*args, **kwargs):
-#         token = request.args.get('token')
-#         if not token:
-#             return jsonify({'res': 'Token is missing'})
-#         try:
-#             data = jwt.decode(token, app.config['SECRET_KEY'])
-#         except:
-#             return jsonify({'res': 'token is invalid'})
-#         return f(*args, **kwargs)
-#     return decorated
- 
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -93,11 +80,6 @@ def auth(user):
     db_connection.commit()
 
     return jsonify({'res': 'user verified', 'user': {'id': data[0], 'surname': data[1].strip(), 'lastname': data[2].strip(), 'email': data[3].strip() } })
-
-@app.route('/all_sensor_data', methods=['GET'])
-def all_sensor_data():
-    data = list(mongo.db.sensors.find({}, {'_id': False}))
-    return jsonify({'sensors': data})
 
 @app.route('/logIn')
 #@cross_origin()
@@ -169,7 +151,6 @@ def updateLastActionTable():
         db_connection.commit()
         return jsonify({"response": "success"})
     except Exception as err:
-        print(err)
         return jsonify({"response": "error"})
 
 
@@ -184,7 +165,7 @@ def gen(camera):
         yield frame
 @app.route('/', methods=['GET'])
 def test4545():
-    return jsonify({"response": "ok"})
+    return jsonify({"conncection": "ok"})
 
 
 # @app.route('/video_feed', methods=['POST'])
@@ -268,7 +249,6 @@ def test5(data):
             'id': i[2].strip(),
             'time': """{0}.{1}.{2} {3}:{4}""".format(i[1].day, i[1].month, i[1].year, i[1].hour, i[1].minute)
             })
-    print(retTable)
     query = 'SELECT title, power FROM public.sensors'
     cursor.execute(query)
     data = cursor.fetchall()
