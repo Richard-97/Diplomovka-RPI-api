@@ -184,6 +184,7 @@ def test4545():
 @cross_origin(origin='https://diplomovka-fe.herokuapp.com',headers=['Content- Type'])
 def textToSpeech():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
+    print('GOOGLE', os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     client = texttospeech.TextToSpeechClient()
     text = request.get_json()['text']
     synthesis_input = texttospeech.types.SynthesisInput(text=text)
@@ -199,8 +200,8 @@ def textToSpeech():
     # Perform the text-to-speech request on the text input with the selected
     # voice parameters and audio file type
     response = client.synthesize_speech(synthesis_input, voice, audio_config)
-    #with open('output.mp3', 'wb') as out:
-        # out.write(response.audio_content)
+    # with open('output.mp3', 'wb') as out:
+    #     out.write(response.audio_content)
     return Response(response.audio_content, mimetype="audio/mp3")
     
 
