@@ -202,7 +202,8 @@ def textToSpeech():
     # # with open('output.mp3', 'wb') as out:
     # #     out.write(response.audio_content)
     # return Response(response.audio_content, mimetype="audio/mp3")
-    return jsonify({"text to speech": "ok"})
+    rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
+    return jsonify({"text to speech": rpi_sensors_grovepi})
     
 
 @socketio.on('connect')
