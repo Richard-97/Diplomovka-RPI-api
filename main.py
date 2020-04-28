@@ -179,6 +179,7 @@ def test4545():
 #                       mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/text_to_speech', methods=['POST'])
+@cross_origin()
 def textToSpeech():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
     client = texttospeech.TextToSpeechClient()
