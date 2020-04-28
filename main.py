@@ -305,10 +305,10 @@ def startGoogleCloudStream(data):
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    from gevent import pywsgi
-    from geventwebsocket.handler import WebSocketHandler
-    server = pywsgi.WSGIServer(('', port), app, handler_class=WebSocketHandler)
-    server.serve_forever()
+    # from gevent import pywsgi
+    # from geventwebsocket.handler import WebSocketHandler
+    # server = pywsgi.WSGIServer(('', port), app, handler_class=WebSocketHandler)
+    # server.serve_forever()
 
     #app.run(host='0.0.0.0', port=port)
-    #socketio.run(app, port=port)
+    socketio.run(app, port=port)
