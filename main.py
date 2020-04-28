@@ -32,8 +32,10 @@ streaming_config = speech.types.StreamingRecognitionConfig(
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'diploma-seceret'
-socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app, cors_allowed_origins="*")
+app.config['CORS_HEADERS'] = 'Content-Type'
+CORS(app)
+socketio = SocketIO(app)
+
 
 db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "kandula.db.elephantsql.com",  port = "5432", database = "oguyvjhp")
 PI3_URL_grovepi = 'http://88.212.50.96:8080/rasberry_pi_sensors_grovepi'
@@ -179,7 +181,6 @@ def test4545():
 #                       mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/text_to_speech', methods=['POST'])
-@cross_origin()
 def textToSpeech():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
     client = texttospeech.TextToSpeechClient()
