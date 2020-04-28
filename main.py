@@ -180,7 +180,7 @@ def test4545():
 
 @app.route('/text_to_speech', methods=['POST'])
 def textToSpeech():
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="textToSpeechCredentials.json"
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
     client = texttospeech.TextToSpeechClient()
     text = request.get_json()['text']
     synthesis_input = texttospeech.types.SynthesisInput(text=text)
