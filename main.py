@@ -34,7 +34,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'diploma-seceret'
 app.config['CORS_HEADERS'] = 'Content-Type'
 CORS(app)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="https://diplomovka-fe.herokuapp.com")
 
 
 db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "kandula.db.elephantsql.com",  port = "5432", database = "oguyvjhp")
