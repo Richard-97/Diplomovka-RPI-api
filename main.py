@@ -13,6 +13,9 @@ import speech_recognition as sr
 from google.cloud import speech
 from google.cloud.speech_v1p1beta1 import enums
 from functools import wraps
+import grovepi
+import RPi.GPIO as GPIO
+import Adafruit_DHT
 
 
 #from rule_base_system import StartSystem
@@ -37,17 +40,90 @@ CORS(app, cors_allowed_origins="*")
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 
-db_connection = psycopg2.connect(user = "oguyvjhp", password = "PtvRuNnyOrTnWiYbtkha1C7cu0f5Avsi",  host = "kandula.db.elephantsql.com",  port = "5432", database = "oguyvjhp")
-PI3_URL_grovepi = 'http://88.212.50.96:8080/rasberry_pi_sensors_grovepi'
-PI3_URL_LIGHTS = 'http://88.212.50.96:8080/rasberry_pi_light_sensor' 
-PI3_URL = 'http://88.212.50.96:8080/rasberry_pi_sensors'
-PI3_LIGHT_SENSORS = 'http://88.212.50.96:8080/rasberry_pi_light_sensor'
+red_led = 5
+green_led = 7
+blue_led = 2
+
+gas_sensor = 0 #A0
+light_sensor = 2 #A2
+magnetic_switch = 3 #D3
+switch = 6 #D6
+pir_sensor = 8 #D8
+potentiometer = 1 #A1
+
+fire_sensor_GPIO = 2
+temp_hum_sensor_GPIO = 3
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(fire_sensor_GPIO, GPIO.IN)
+GPIO.setwarnings(False)
+
+grovepi.pinMode(gas_sensor,"INPUT")
+grovepi.pinMode(light_sensor,"INPUT")
+grovepi.pinMode(potentiometer,"INPUT")
+grovepi.pinMode(pir_sensor,"INPUT")
+grovepi.pinMode(magnetic_switch,"INPUT")
+grovepi.pinMode(switch,"INPUT")
+grovepi.pinMode(red_led,"OUTPUT")
+grovepi.pinMode(green_led,"OUTPUT")
+grovepi.pinMode(blue_led,"OUTPUT")
+
+fire_detection = False
+
+
+db_connection = psycopg2.connect(user = "postgres", password = "Ronaldo",  host = "localhost",  port = "5432", database = "diplomovka")
 
 def print_date_time():
     print(time.strftime("%A, %d. %B %Y %I:%M:%S %p"))
 def tuple_to_dict(tup, di): 
     di = dict(tup) 
-    return di 
+    return di
+def getSensorsValues():
+    hum, temp = Adafruit_DHT.read_retry(11, 3)
+    gas_sensor_value = grovepi.analogRead(gas_sensor)
+    light_sensor_value = grovepi.analogRead(light_sensor)
+    motion_sensor_value = grovepi.digitalRead(pir_sensor)
+    switch_sensor = grovepi.digitalRead(switch)
+    motion = False
+    door_sensor_values = False
+    gas_density = (float)(gas_sensor_value / 1024)
+    magnetic_check_values = []
+    
+    for i in range(0,5):
+        magnetic_check_values.append(grovepi.digitalRead(magnetic_switch))
+        time.sleep(0.5)
+        
+    if motion_sensor_value==0 or motion_senscor_value==1:
+        if motion_sensor_value==1:
+            motion = True
+        else:
+            motion = False
+            
+    if 1 in magnetic_check_values:
+        door_sensor_values = True
+    return {
+        "gas_sensor": {"data": gas_sensor_value, "density": gas_density},
+        "potenciometer": grovepi.analogRead(potentiometer),
+        "light_sensors": light_sensor_value,
+        "motion_sensor": motion,
+        "door_sensor": door_sensor_values,
+        "switch_sensor": switch_sensor,
+        "fire_sensor": GPIO.input(fire_sensor_GPIO),
+        "temperature": temp,
+        "humidity": hum,
+        "lights": grovepi.digitalRead(red_led)
+        }
+def lightSensor(b):
+    if b:
+        grovepi.digitalWrite(red_led,1)
+        grovepi.digitalWrite(green_led,1)
+        grovepi.digitalWrite(blue_led,1)
+    else:
+        grovepi.digitalWrite(red_led,0)
+        grovepi.digitalWrite(green_led,0)
+        grovepi.digitalWrite(blue_led,0)
+    
+    return {"mainLight": not boolVal}
 
 def token_required(f):
     @wraps(f)
@@ -84,7 +160,6 @@ def auth(user):
     return jsonify({'res': 'user verified', 'user': {'id': data[0], 'surname': data[1].strip(), 'lastname': data[2].strip(), 'email': data[3].strip() } })
 
 @app.route('/logIn')
-#@cross_origin()
 def logIn():
     if(request.method == 'GET'):
         auth = request.authorization
@@ -147,7 +222,8 @@ def updateLastActionTable():
         userID = request.get_json()['userID']
         action = request.get_json()['action']
         time = request.get_json()['time']
-        query = """INSERT INTO "tableActions" ("userID", action, time) VALUES ('{0}', '{1}', '{2}');""".format(userID, action, time)
+        query = """INSERT INTO tableActions (userID, action, time) VALUES ('{0}', '{1}', '{2}');""".format(userID, action, time)
+        print(query)
         cursor = db_connection.cursor()
         cursor.execute(query)
         db_connection.commit()
@@ -165,9 +241,11 @@ def gen(camera):
             break
         frame = camera.get_frame()
         yield frame
+        
 @app.route('/', methods=['GET'])
 def test4545():
-    return jsonify({"conncection": "ok"})
+    rpi_sensors_grovepi = getSensorsValues()
+    return jsonify({"conncection": rpi_sensors_grovepi})
 
 
 # @app.route('/video_feed', methods=['POST'])
@@ -209,20 +287,24 @@ def connectHandler():
 
 @socketio.on('join')
 def connectHandler2(data):
-    query = 'SELECT title, power FROM public.sensors'
+    query = 'SELECT title, power FROM sensors'
     cursor = db_connection.cursor()
     cursor.execute(query)
     data = cursor.fetchall()
     db_connection.commit()
     dictionary = {}
+    print('*****')
     data = tuple_to_dict(data, dictionary)
-    rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
+    rpi_sensors_grovepi = getSensorsValues()
+    print(rpi_sensors_grovepi)
+    retTable = []
+   
     emit('update_sensors', rpi_sensors_grovepi)
     emit('update_actions', data)
+    emit('update_table_data', retTable)
 
 @socketio.on('update_sensors_start')
 def update_sensors_start():
-    print('update_sensors_start')
     query = 'SELECT title, power FROM public.sensors'
     cursor = db_connection.cursor()
     cursor.execute(query)
@@ -234,12 +316,13 @@ def update_sensors_start():
 
 @socketio.on('update_sensors')
 def test5(data):
-    print('update_sensors')
     query = 'UPDATE sensors SET power =' + str(data["bool"]).lower() +" WHERE id = " + str(data["id"])
+    print(query)
     cursor = db_connection.cursor()
     cursor.execute(query)
 
-    query = 'SELECT tb.action, tb.time, u.email from "tableActions" tb LEFT JOIN "users" u ON u.id=tb."userID"'
+    query = 'SELECT tb.action, tb.time, u.email from tableActions tb LEFT JOIN users u ON u.id=tb.userID'
+    print(query)
     cursor = db_connection.cursor()
     cursor.execute(query)
     tableData = cursor.fetchall()
@@ -269,13 +352,12 @@ def update_sensor_lights(data):
     cursor.execute(query)   
     db_connection.commit()
 
-    headers = {'content-type': 'application/json'}
-    req = requests.post(url=PI3_LIGHT_SENSORS, data=json.dumps({'lights': data['bool']}), headers=headers)
-
+    lightSensor(data['bool'])
+    
 @socketio.on('update_sensors_grovepi_interval')
 def update_sensors_interval():
     try:
-        rpi_sensors_grovepi = requests.get(url=PI3_URL_grovepi).json()
+        rpi_sensors_grovepi = getSensorsValues()
         print(rpi_sensors_grovepi)
         emit('update_sensors', rpi_sensors_grovepi, broadcast=True)
     except Exception as err:
@@ -286,29 +368,21 @@ def expertalSystem():
     #a = StartSystem(temp=21, hum=80, motion=False, lights=True, gas=50).getResult()
     emit('expertal_system', {"ok":4})
 
-@socketio.on('binaryData')
-def startGoogleCloudStream(data):
-    requests = (speech.types.StreamingRecognizeRequest(audio_content=data))
-    responses = client.streaming_recognize(streaming_config, requests)
-    for result in responses:
-        if not response.results:
-            continue
-
-        result = response.results[0]
-
-        if not result.alternatives:
-            continue
-
-        transcript = result.alternatives[0].transcript
-
+#@socketio.on('binaryData')
+#def startGoogleCloudStream(data):
+#    requests = (speech.types.StreamingRecognizeRequest(audio_content=data))
+#    responses = client.streaming_recognize(streaming_config, requests)
+#    for result in responses:
+#        if not response.results:
+#            continue#
+#
+#        result = response.results[0]
+#
+#        if not result.alternatives:
+#            continue
+#
+#       transcript = result.alternatives[0].transcript
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    # from gevent import pywsgi
-    # from geventwebsocket.handler import WebSocketHandler
-    # server = pywsgi.WSGIServer(('', port), app, handler_class=WebSocketHandler)
-    # server.serve_forever()
-
-    #app.run(host='0.0.0.0', port=port)
-    socketio.run(app, port=port)
+    socketio.run(app, host='0.0.0.0', port=5000)
