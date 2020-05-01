@@ -20,7 +20,7 @@ import pygame.camera
 from pygame.locals import *
 from PIL import Image
 
-#from rule_base_system import StartSystem
+from rule_base_system import StartSystem
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
 
@@ -81,7 +81,20 @@ def tuple_to_dict(tup, di):
     di = dict(tup) 
     return di
 def getSensorsValues():
+    return {
+        "gas_sensor": {"data": 50, "density": 10},
+        "potenciometer": 1,
+        "light_sensors": 300,
+        "motion_sensor": True,
+        "door_sensor": False,
+        "switch_sensor": False,
+        "fire_sensor": 1,
+        "temperature": 23,
+        "humidity": 52,
+        "lights": True
+        }
     hum, temp = Adafruit_DHT.read_retry(11, 3)
+    print('*****')
     gas_sensor_value = grovepi.analogRead(gas_sensor)
     light_sensor_value = grovepi.analogRead(light_sensor)
     motion_sensor_value = grovepi.digitalRead(pir_sensor)
@@ -95,7 +108,7 @@ def getSensorsValues():
         magnetic_check_values.append(grovepi.digitalRead(magnetic_switch))
         time.sleep(0.5)
         
-    if motion_sensor_value==0 or motion_senscor_value==1:
+    if motion_sensor_value==0 or motion_sensor_value==1:
         if motion_sensor_value==1:
             motion = True
         else:
@@ -160,6 +173,46 @@ def auth(user):
     db_connection.commit()
 
     return jsonify({'res': 'user verified', 'user': {'id': data[0], 'surname': data[1].strip(), 'lastname': data[2].strip(), 'email': data[3].strip() } })
+ 
+@app.route('/surname', methods=['POST'])
+def updateSurname():
+    value = request.get_json()['value']
+    id_ = request.get_json()['id']
+    query = """UPDATE users SET first_name='{0}' WHERE id={1}""".format(value, id_)
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    db_connection.commit()
+    return jsonify({'res': 'ok'})
+
+@app.route('/lastname', methods=['POST'])
+def updateLastname():
+    value = request.get_json()['value']
+    id_ = request.get_json()['id']
+    query = """UPDATE users SET last_name='{0}' WHERE id={1}""".format(value, id_)
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    db_connection.commit()
+    return jsonify({'res': 'ok'})
+
+@app.route('/email', methods=['POST'])
+def updateEmail():
+    value = request.get_json()['value']
+    id_ = request.get_json()['id']
+    query = """UPDATE users SET email='{0}' WHERE id={1}""".format(value, id_)
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    db_connection.commit()
+    return jsonify({'res': 'ok'})
+
+@app.route('/password', methods=['POST'])
+def updatePassword():
+    value = hashlib.md5(request.get_json()['value'].encode()).hexdigest()
+    id_ = request.get_json()['id']
+    query = """UPDATE users SET password='{0}' WHERE id={1}""".format(value, id_)
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    db_connection.commit()
+    return jsonify({'res': 'ok'})
     
 
 @app.route('/logIn')
@@ -207,8 +260,8 @@ def registration():
                 for i in data:
                     if(email == i[1].strip()):
                         return jsonify({'response': 'user exists'})
-            else: 
                 newID = data.pop()[0] + 1  
+                
          
             query = "INSERT INTO users (id, first_name, last_name, email, password) VALUES ('{0}', '{1}', '{2}', '{3}', '{4}') ".format(newID, firstName, lastName, email, password)
             cursor = db_connection.cursor()
@@ -260,7 +313,19 @@ def video_feed():
             socketio.emit('video_flask',{'data':  video_frame} )
     return Response(gen(VideoCamera()),
                       mimetype='multipart/x-mixed-replace; boundary=frame')
-
+@app.route('/sensorTest')
+def sensorTest():
+    motion_sensor_value = grovepi.digitalRead(pir_sensor)
+    motion = False
+    if motion_sensor_value==0 or motion_sensor_value==1:
+        if motion_sensor_value==1:
+            motion = True
+        else:
+            motion = False
+    return jsonify({
+            'motion': motion
+        })
+    
 @app.route('/text_to_speech', methods=['POST'])
 def textToSpeech():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
@@ -324,7 +389,7 @@ def test5(data):
     cursor = db_connection.cursor()
     cursor.execute(query)
 
-    query = 'SELECT tb.action, tb.time, u.email from tableActions tb LEFT JOIN users u ON u.id=tb.userID'
+    query = 'SELECT tb.action, tb.time, u.email from tableActions tb LEFT JOIN users u ON u.id=tb.userID ORDER BY tb.time ASC'
     print(query)
     cursor = db_connection.cursor()
     cursor.execute(query)
@@ -366,10 +431,28 @@ def update_sensors_interval():
     except Exception as err:
         emit('error', )
 
-@socketio.on('expertal_system')
-def expertalSystem():
-    #a = StartSystem(temp=21, hum=80, motion=False, lights=True, gas=50).getResult()
-    emit('expertal_system', {"ok":4})
+@socketio.on('/expertal_system')
+def expertalSystem(data):
+    temp = data['temperature']
+    lights = data['lights']
+    windows = data['windows']
+    climate = grovepi.digitalRead(switch)
+    gas = data['gas']
+    fire = data['fire']
+    alarm = data['alarm']
+    motion_sensor_value = grovepi.digitalRead(pir_sensor)
+    motion = False
+    
+    if motion_sensor_value==0 or motion_sensor_value==1:
+        if motion_sensor_value==1:
+            motion = True
+        else:
+            motion = False
+    
+    system = StartSystem(temp=temp, climate=climate, windows=windows, motion=motion, lights=lights, gas=gas, fire=fire, alarm=alarm)
+    retdata = system.getResult()
+    emit('expertal_system', retdata)
+
 
 #@socketio.on('binaryData')
 #def startGoogleCloudStream(data):
