@@ -4,7 +4,7 @@ import requests, time
 from flask_cors import CORS, cross_origin
 import json, time, random, hashlib, atexit, os, jwt, datetime
 from google.cloud import texttospeech
-# from camera import VideoCamera
+from camera import VideoCamera
 import json
 import base64
 import threading
@@ -13,10 +13,12 @@ import speech_recognition as sr
 from google.cloud import speech
 from google.cloud.speech_v1p1beta1 import enums
 from functools import wraps
-import grovepi
+import grovepi, io
 import RPi.GPIO as GPIO
 import Adafruit_DHT
-
+import pygame.camera
+from pygame.locals import *
+from PIL import Image
 
 #from rule_base_system import StartSystem
 
@@ -158,6 +160,7 @@ def auth(user):
     db_connection.commit()
 
     return jsonify({'res': 'user verified', 'user': {'id': data[0], 'surname': data[1].strip(), 'lastname': data[2].strip(), 'email': data[3].strip() } })
+    
 
 @app.route('/logIn')
 def logIn():
@@ -236,7 +239,7 @@ GLOBAL_CAMERA = False
 def gen(camera):
     while True:
         time.sleep(0.2)
-        if not GLOBAL_CAMERA: 
+        if not GLOBAL_CAMERA:
             camera.stop()
             break
         frame = camera.get_frame()
@@ -248,15 +251,15 @@ def test4545():
     return jsonify({"conncection": rpi_sensors_grovepi})
 
 
-# @app.route('/video_feed', methods=['POST'])
-# def video_feed():
-#     global GLOBAL_CAMERA
-#     GLOBAL_CAMERA = request.get_json()['play']
-#     if GLOBAL_CAMERA:
-#         for video_frame in gen(VideoCamera()):  
-#             socketio.emit('video_flask',{'data':  video_frame} )
-#     return Response(gen(VideoCamera()),
-#                       mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/video_feed', methods=['POST'])
+def video_feed():
+    global GLOBAL_CAMERA
+    GLOBAL_CAMERA = request.get_json()['play']
+    if GLOBAL_CAMERA:
+        for video_frame in gen(VideoCamera()):
+            socketio.emit('video_flask',{'data':  video_frame} )
+    return Response(gen(VideoCamera()),
+                      mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/text_to_speech', methods=['POST'])
 def textToSpeech():
