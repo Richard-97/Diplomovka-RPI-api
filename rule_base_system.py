@@ -114,13 +114,6 @@ class ControlExpertSystem(KnowledgeEngine):
     ))
     def _idx9(self):
         self.expertalSystem.add(key='windows', value='on')
-    @Rule(AND(
-        Windows(windows=False)
-        ,Climate(climate=True)
-        ,Temperature(temperature=P(lambda x: x < 27))
-    ))
-    def _idx10(self):
-        self.expertalSystem.add(key='windows', value='off')
         
     @Rule(AND(
         Windows(windows=True)

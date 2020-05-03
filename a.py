@@ -17,9 +17,6 @@ import grovepi, io
 import RPi.GPIO as GPIO
 import Adafruit_DHT
 from PIL import Image
-from threading import Thread
-import eventlet
-eventlet.monkey_patch()
 
 from rule_base_system import StartSystem
 
@@ -40,7 +37,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'diploma-seceret'
 
 CORS(app, cors_allowed_origins="*")
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 red_led = 5
@@ -60,7 +57,7 @@ temp_hum_sensor_GPIO = 3
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(fire_sensor_GPIO, GPIO.IN)
 GPIO.setwarnings(False)
-
+GPIO.cleanup()
 
 grovepi.pinMode(gas_sensor,"INPUT")
 grovepi.pinMode(light_sensor,"INPUT")
@@ -72,35 +69,34 @@ grovepi.pinMode(red_led,"OUTPUT")
 grovepi.pinMode(green_led,"OUTPUT")
 grovepi.pinMode(blue_led,"OUTPUT")
 
-fire_detection = 1
+fire_detection = False
 
 
 db_connection = psycopg2.connect(user = "postgres", password = "Ronaldo",  host = "localhost",  port = "5432", database = "diplomovka")
 
-def getFireValue():
-    v = GPIO.input(fire_sensor_GPIO)
-    print(v)
-    global fire_detection
-    if v == 0:
-        print('horiii')
-        fire_detection = 0
-    else: fire_detection = 1
-
 def print_date_time():
     print(time.strftime("%A, %d. %B %Y %I:%M:%S %p"))
-    
 def tuple_to_dict(tup, di): 
     di = dict(tup) 
     return di
 def getSensorsValues():
-    print('start')
-    getFireValue()      
+    return {
+        "gas_sensor": {"data": 50, "density": 10},
+        "potenciometer": 1,
+        "light_sensors": 300,
+        "motion_sensor": True,
+        "door_sensor": False,
+        "switch_sensor": 1,
+        "fire_sensor": 1,
+        "temperature": 23,
+        "humidity": 52,
+        "lights": grovepi.digitalRead(red_led)
+        }
     hum, temp = Adafruit_DHT.read_retry(11, 3)
     gas_sensor_value = grovepi.analogRead(gas_sensor)
     light_sensor_value = grovepi.analogRead(light_sensor)
     motion_sensor_value = grovepi.digitalRead(pir_sensor)
     switch_sensor = grovepi.digitalRead(switch)
-    print('ok')
     motion = False
     door_sensor_values = False
     gas_density = (float)(gas_sensor_value / 1024)
@@ -118,18 +114,6 @@ def getSensorsValues():
             
     if 1 in magnetic_check_values:
         door_sensor_values = True
-    print({
-        "gas_sensor": {"data": gas_sensor_value, "density": gas_density},
-        "potenciometer": grovepi.analogRead(potentiometer),
-        "light_sensors": light_sensor_value,
-        "motion_sensor": motion,
-        "door_sensor": door_sensor_values,
-        "switch_sensor": switch_sensor,
-        "fire_sensor": fire_detection,
-        "temperature": temp,
-        "humidity": hum,
-        "lights": grovepi.digitalRead(red_led)
-        })
     return {
         "gas_sensor": {"data": gas_sensor_value, "density": gas_density},
         "potenciometer": grovepi.analogRead(potentiometer),
@@ -137,7 +121,7 @@ def getSensorsValues():
         "motion_sensor": motion,
         "door_sensor": door_sensor_values,
         "switch_sensor": switch_sensor,
-        "fire_sensor": fire_detection,
+        "fire_sensor": GPIO.input(fire_sensor_GPIO),
         "temperature": temp,
         "humidity": hum,
         "lights": grovepi.digitalRead(red_led)
@@ -176,8 +160,7 @@ def token_required(f):
         return f(user, *args, **kwargs)
     return decorated
 
-GLOBAL_CAMERA = True
-thread = None
+GLOBAL_CAMERA = False
 def gen(camera):
     while True:
         time.sleep(0.2)
@@ -185,19 +168,15 @@ def gen(camera):
             camera.stop()
             break
         frame = camera.get_frame()
-        socketio.emit('video_flask',{'data':  frame}, broadcast=True)
-@app.route('/stopvideo')
-def stopvideo():
-    global GLOBAL_CAMERA, thread
-    GLOBAL_CAMERA = False
-    thread.terminate()
-    return jsonify({'res': 'ok'})
-@app.route('/video_feed')
+        yield frame
+        
+@app.route('/video_feed', methods=['POST'])
 def video_feed():
-    global GLOBAL_CAMERA, thread
+    global GLOBAL_CAMERA
+    GLOBAL_CAMERA = request.get_json()['play']
     if GLOBAL_CAMERA:
-        thread = Thread(target=gen(VideoCamera()))
-        thread.start()
+        for video_frame in gen(VideoCamera()):
+            socketio.emit('video_flask',{'data':  video_frame} )
     return Response(gen(VideoCamera()),
                       mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -227,6 +206,16 @@ def updateLastname():
     value = request.get_json()['value']
     id_ = request.get_json()['id']
     query = """UPDATE users SET last_name='{0}' WHERE id={1}""".format(value, id_)
+    cursor = db_connection.cursor()
+    cursor.execute(query)
+    db_connection.commit()
+    return jsonify({'res': 'ok'})
+
+@app.route('/email', methods=['POST'])
+def updateEmail():
+    value = request.get_json()['value']
+    id_ = request.get_json()['id']
+    query = """UPDATE users SET email='{0}' WHERE id={1}""".format(value, id_)
     cursor = db_connection.cursor()
     cursor.execute(query)
     db_connection.commit()
@@ -278,13 +267,25 @@ def registration():
             email = request.get_json()['email']
             password = hashlib.md5(request.get_json()['password'].encode()).hexdigest()
 
-            query = "INSERT INTO users (first_name, last_name, email, password) VALUES ('{0}', '{1}', '{2}', '{3}') ".format(firstName, lastName, email, password)
+            query = 'SELECT id, email FROM users'
+            cursor = db_connection.cursor()
+            cursor.execute(query)
+            data = cursor.fetchall()
+            db_connection.commit()
+            newID = 1
+            if data != None:
+                for i in data:
+                    if(email == i[1].strip()):
+                        return jsonify({'response': 'user exists'})
+                newID = data.pop()[0] + 1  
+                
+         
+            query = "INSERT INTO users (id, first_name, last_name, email, password) VALUES ('{0}', '{1}', '{2}', '{3}', '{4}') ".format(newID, firstName, lastName, email, password)
             cursor = db_connection.cursor()
             cursor.execute(query)
             db_connection.commit()
             return jsonify({'response': 'success'})
         except Exception as err:
-            print(err)
             return jsonify({'response': 'error'})
 
 @app.route('/updateLastActionTable', methods=['POST'])
@@ -307,8 +308,8 @@ def updateLastActionTable():
         
 @app.route('/', methods=['GET'])
 def test4545():
-    rpi_sensors_grovepi = GPIO.input(fire_sensor_GPIO)
-    return jsonify({"conncection": rpi_sensors_grovepi})
+    #rpi_sensors_grovepi = getSensorsValues()
+    return jsonify({"conncection": 'ok'})
     
 @app.route('/sensorTest')
 def sensorTest():
@@ -322,7 +323,28 @@ def sensorTest():
     return jsonify({
             'motion': motion
         })
+    
+@app.route('/text_to_speech', methods=['POST'])
+def textToSpeech():
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="speechToTextCredentials.json"
+    client = texttospeech.TextToSpeechClient()
+    text = request.get_json()['text']
+    synthesis_input = texttospeech.types.SynthesisInput(text=text)
+    voice = texttospeech.types.VoiceSelectionParams(
+    language_code='sk-SK',
+    name='sk-SK-Wavenet-A',
+    ssml_gender=texttospeech.enums.SsmlVoiceGender.FEMALE)
 
+    # Select the type of audio file you want returned
+    audio_config = texttospeech.types.AudioConfig(
+        audio_encoding=texttospeech.enums.AudioEncoding.MP3)
+
+    # Perform the text-to-speech request on the text input with the selected
+    # voice parameters and audio file type
+    response = client.synthesize_speech(synthesis_input, voice, audio_config)
+    #with open('output.mp3', 'wb') as out:
+        # out.write(response.audio_content)
+    return Response(response.audio_content, mimetype="audio/mp3")
      
 @socketio.on('connect')
 def connectHandler():
@@ -440,7 +462,6 @@ def update_sensors_interval():
 
 @socketio.on('expertal_system')
 def expertalSystem():
-    print('start ES')
     query = 'SELECT title, power FROM sensors'
     cursor = db_connection.cursor()
     cursor.execute(query)
@@ -456,8 +477,7 @@ def expertalSystem():
     window2 = dataDb['window2']
     climate = grovepi.digitalRead(switch)
     gas = grovepi.analogRead(gas_sensor)
-    #fire = GPIO.input(fire_sensor_GPIO)
-    fire = 1
+    fire = GPIO.input(fire_sensor_GPIO)
     alarm = False
     motion_sensor_value = grovepi.digitalRead(pir_sensor)
     motion = False
@@ -479,13 +499,8 @@ def expertalSystem():
 
     system = StartSystem(temp=temp, climate=climate, windows=windows, motion=motion, lights=lights, gas=gasData, fire=fireData, alarm=alarm)
     retdata = system.getResult()
-    print(retdata)
     emit('expertal_system', retdata)
 
 
 if __name__ == '__main__':
-    #from gevent import pywsgi
-    #from geventwebsocket.handler import WebSocketHandler
-    #server = pywsgi.WSGIServer(('',5000), app, handler_class=WebSocketHandler)
-    #server.serve_forever()
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, threaded=True)
